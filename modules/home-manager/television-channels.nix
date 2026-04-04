@@ -24,12 +24,7 @@ let
     lib = pkgs.lib;
   };
   mkActionName = path: attrPath:
-    "install-${
-      replaceStrings
-        [ "/" "." " " ":" "\"" "'" "[" "]" ]
-        [ "-" "-" "-" "-" "" "" "-" "-" ]
-        "${path}-${attrPath}"
-    }";
+    "install to ${attrPath}";
   mkInstallCommand = path: attrPath:
     "nix-editor -i -a \"$(printf '%s' '{}' | sed 's|^[^/]*/||')\" ${escapeShellArg path} ${escapeShellArg attrPath}"
     + optionalString cfg.rebuild " && sudo nixos-rebuild switch";
@@ -97,7 +92,7 @@ in
     ];
 
     programs.television.enable = mkDefault true;
-    programs.television.channels.nix-search-tv = mkDefault {
+    programs.television.channels.nix-packages = mkDefault {
       metadata = {
         name = "nix-search-tv";
         description = "Search Nix packages and install the selected result";
