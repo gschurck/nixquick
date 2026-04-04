@@ -16,8 +16,7 @@ let
 
   cfg = config.nixquick;
   nixEditorSrc = builtins.fetchTarball {
-    url = "https://github.com/snowfallorg/nix-editor/archive/a72c7d695d5568fe19ff34d161a22c716ffbdc07.tar.gz";
-    sha256 = "04i44zxc5282p0xaqacf2r8dgw5fazbwl50211cl4d4gy4sgj8zl";
+    url = "https://github.com/gschurck/nix-editor/archive/dec443e058d7368ae18d60bc8c83f0c7a2f6f66e.tar.gz";
   };
   nixEditorPkg = import nixEditorSrc {
     inherit pkgs;
