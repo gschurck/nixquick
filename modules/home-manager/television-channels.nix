@@ -94,7 +94,7 @@ in
     programs.television.enable = mkDefault true;
     programs.television.channels.nix-packages = mkDefault {
       metadata = {
-        name = "nix-search-tv";
+        name = "nix-packages";
         description = "Search Nix packages and install the selected result";
         requirements = [ "nix-search-tv" ];
       };
