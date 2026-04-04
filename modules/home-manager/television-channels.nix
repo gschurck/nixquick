@@ -2,11 +2,15 @@
 
 let
   inherit (lib)
+    escapeShellArg
+    mapAttrsToList
     mkEnableOption
     mkIf
     mkDefault
     mkOption
-    optionalString
+    nameValuePair
+    optionalAttrs
+    replaceStrings
     types;
 
   cfg = config.nixquick;
@@ -18,18 +22,58 @@ let
     inherit pkgs;
     lib = pkgs.lib;
   };
-  systemPackageConfigFileFileArg = optionalString (cfg.systemPackageConfigFile != "") "${cfg.systemPackageConfigFile}";
+  mkActionName = path: attrPath:
+    "install-${
+      replaceStrings
+        [ "/" "." " " ":" "\"" "'" "[" "]" ]
+        [ "-" "-" "-" "-" "" "" "-" "-" ]
+        "${path}-${attrPath}"
+    }";
+  installActionEntries =
+    builtins.concatLists (
+      mapAttrsToList
+        (path: attrPaths:
+          map
+            (attrPath:
+              nameValuePair (mkActionName path attrPath) {
+                description = "Install the selected package to ${attrPath}";
+                command = "nix-editor -i -a \"$(printf '%s' '{}' | sed 's|^[^/]*/||')\" ${escapeShellArg path} ${escapeShellArg attrPath}";
+                mode = "execute";
+              })
+            attrPaths)
+        cfg.destinations
+    );
+  installActions = builtins.listToAttrs installActionEntries;
+  defaultDestinationPaths = builtins.attrNames cfg.destinations;
+  defaultActionName =
+    if defaultDestinationPaths == [ ]
+    then null
+    else
+      let
+        defaultPath = builtins.head defaultDestinationPaths;
+        defaultAttrPaths = cfg.destinations.${defaultPath};
+      in
+      if defaultAttrPaths == [ ]
+      then null
+      else mkActionName defaultPath (builtins.head defaultAttrPaths);
 in
 {
   options.nixquick = {
     enable = mkEnableOption "the nix-search-tv television channel";
 
-    systemPackageConfigFile = mkOption {
-      type = types.str;
-      default = "/etc/nix/configuration.nix";
-      example = "~/nixos/configuration.nix";
+    destinations = mkOption {
+      type = types.attrsOf (types.listOf types.str);
+      default = {
+        "/etc/nix/configuration.nix" = [ "environment.systemPackages" ];
+      };
+      example = {
+        "~/nixos/configuration.nix" = [
+          "environment.systemPackages"
+          "users.users.guillaume.packages"
+        ];
+      };
       description = ''
-        Optional path.
+        Destination config paths and the attribute paths where selected packages can be installed.
       '';
     };
   };
@@ -52,14 +96,9 @@ in
       preview = {
         command = "nix-search-tv preview '{}'";
       };
-      actions.install = {
-        description = "Install the selected package";
-        command = "nix-editor -i -a \"$(printf '%s' '{}' | sed 's/^nixpkgs\\///')\" ${systemPackageConfigFileFileArg} environment.systemPackages";
-        mode = "execute";
-      };
-      keybindings = {
-        enter = "actions:install";
-      };
+      actions = installActions;
+    } // optionalAttrs (defaultActionName != null) {
+      keybindings.enter = "actions:${defaultActionName}";
     };
   };
 }
