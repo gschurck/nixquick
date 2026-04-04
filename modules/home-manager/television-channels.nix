@@ -68,6 +68,15 @@ in
       '';
     };
 
+    username = mkOption {
+      type = types.nullOr types.str;
+      default = null;
+      example = "guillaume";
+      description = ''
+        Optional username used by the nix-installed-packages channel when querying user and Home Manager packages.
+      '';
+    };
+
     destinations = mkOption {
       type = types.attrsOf (types.listOf types.str);
       default = {
@@ -103,6 +112,44 @@ in
       actions = installActions;
     } // optionalAttrs (defaultActionName != null) {
       keybindings.enter = "actions:${defaultActionName}";
+    };
+
+    programs.television.channels.nix-installed-packages = mkDefault {
+      metadata = {
+        name = "nix-installed-packages";
+        description = "List installed Nix packages from system, user, and Home Manager configs";
+      };
+      source.command = ''
+        nix eval --impure --raw --expr '
+          let
+            nixos = import <nixpkgs/nixos> {};
+            user = "${if cfg.username == null then "your-user" else cfg.username}";
+
+            fmt = source: p:
+              let
+                name =
+                  if p ? pname then p.pname
+                  else if p ? name then p.name
+                  else "<unknown>";
+              in
+                "''${source}/ ''${name}";
+
+            systemPkgs =
+              builtins.map (fmt "system")
+                nixos.config.environment.systemPackages;
+
+            userPkgs =
+              builtins.map (fmt "users.''${user}")
+                (nixos.config.users.users.''${user}.packages or []);
+
+            hmPkgs =
+              builtins.map (fmt "home.''${user}")
+                (nixos.config.home-manager.users.''${user}.home.packages or []);
+          in
+            builtins.concatStringsSep "\n" (systemPkgs ++ userPkgs ++ hmPkgs)
+        ' | sort -u
+      '';
+      preview.command = "nix-search-tv preview \"$(printf '%s' '{}' | sed 's|^[^/]*/|nixpkgs/|')\"";
     };
   };
 }
