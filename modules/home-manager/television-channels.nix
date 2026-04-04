@@ -4,12 +4,13 @@ let
   inherit (lib)
     escapeShellArg
     mapAttrsToList
+    mkDefault
     mkEnableOption
     mkIf
-    mkDefault
     mkOption
     nameValuePair
     optionalAttrs
+    optionalString
     replaceStrings
     types;
 
@@ -29,6 +30,9 @@ let
         [ "-" "-" "-" "-" "" "" "-" "-" ]
         "${path}-${attrPath}"
     }";
+  mkInstallCommand = path: attrPath:
+    "nix-editor -i -a \"$(printf '%s' '{}' | sed 's|^[^/]*/||')\" ${escapeShellArg path} ${escapeShellArg attrPath}"
+    + optionalString cfg.rebuild " && sudo nixos-rebuild switch";
   installActionEntries =
     builtins.concatLists (
       mapAttrsToList
@@ -37,7 +41,7 @@ let
             (attrPath:
               nameValuePair (mkActionName path attrPath) {
                 description = "Install the selected package to ${attrPath}";
-                command = "nix-editor -i -a \"$(printf '%s' '{}' | sed 's|^[^/]*/||')\" ${escapeShellArg path} ${escapeShellArg attrPath}";
+                command = mkInstallCommand path attrPath;
                 mode = "execute";
               })
             attrPaths)
@@ -61,6 +65,14 @@ in
   options.nixquick = {
     enable = mkEnableOption "the nix-search-tv television channel";
 
+    rebuild = mkOption {
+      type = types.bool;
+      default = false;
+      description = ''
+        Whether install actions should also run sudo nixos-rebuild switch.
+      '';
+    };
+
     destinations = mkOption {
       type = types.attrsOf (types.listOf types.str);
       default = {
@@ -83,6 +95,7 @@ in
       pkgs.nix-search-tv
       nixEditorPkg
     ];
+
     programs.television.enable = mkDefault true;
     programs.television.channels.nix-search-tv = mkDefault {
       metadata = {
@@ -90,12 +103,8 @@ in
         description = "Search Nix packages and install the selected result";
         requirements = [ "nix-search-tv" ];
       };
-      source = {
-        command = "nix-search-tv print";
-      };
-      preview = {
-        command = "nix-search-tv preview '{}'";
-      };
+      source.command = "nix-search-tv print";
+      preview.command = "nix-search-tv preview '{}'";
       actions = installActions;
     } // optionalAttrs (defaultActionName != null) {
       keybindings.enter = "actions:${defaultActionName}";
