@@ -25,7 +25,7 @@ let
     inherit pkgs;
     lib = pkgs.lib;
   };
-  mkActionName = path: attrPath:
+  mkInstallActionName = path: attrPath:
     "install to ${attrPath}";
   mkSwitchCommand = attrPath:
     if isHomeManagerAttrPath attrPath
@@ -40,7 +40,7 @@ let
       ${mkSwitchCommand attrPath}
     ''
     + ''
-      printf '%s\n' "Updated ${attrPath} in ${path}"
+      printf '%s\n' "Installed in ${attrPath} (${path})"
     '';
   installActionEntries =
     builtins.concatLists (
@@ -48,7 +48,7 @@ let
         (path: attrPaths:
           map
             (attrPath:
-              nameValuePair (mkActionName path attrPath) {
+              nameValuePair (mkInstallActionName path attrPath) {
                 description = "Install the selected package to ${attrPath}";
                 command = mkInstallCommand path attrPath;
                 mode = "execute";
@@ -126,16 +126,16 @@ let
     mode = "execute";
   };
   defaultActionName =
-    if defaultDestinationPaths == [ ]
-    then null
-    else
-      let
-        defaultPath = builtins.head defaultDestinationPaths;
-        defaultAttrPaths = cfg.destinations.${defaultPath};
-      in
-      if defaultAttrPaths == [ ]
+      if defaultDestinationPaths == [ ]
       then null
-      else mkActionName defaultPath (builtins.head defaultAttrPaths);
+      else
+        let
+          defaultPath = builtins.head defaultDestinationPaths;
+          defaultAttrPaths = cfg.destinations.${defaultPath};
+        in
+        if defaultAttrPaths == [ ]
+        then null
+        else mkInstallActionName defaultPath (builtins.head defaultAttrPaths);
 in
 {
   options.nixquick = {
@@ -192,7 +192,7 @@ in
     ];
 
     programs.television.enable = mkDefault true;
-    programs.television.channels.nix-packages = mkDefault {
+    programs.television.channels.nix-packages = mkDefault ({
       metadata = {
         name = "nix-packages";
         description = "Search Nix packages and install the selected result";
@@ -203,7 +203,7 @@ in
       actions = installActions;
     } // optionalAttrs (defaultActionName != null) {
       keybindings.enter = "actions:${defaultActionName}";
-    };
+    });
 
     programs.television.channels.nix-installed-packages = mkDefault {
       metadata = {
