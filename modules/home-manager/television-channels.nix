@@ -26,8 +26,15 @@ let
   mkActionName = path: attrPath:
     "install to ${attrPath}";
   mkInstallCommand = path: attrPath:
-    "nix-editor -i -a \"$(printf '%s' '{}' | sed 's|^[^/]*/||')\" ${escapeShellArg path} ${escapeShellArg attrPath}"
-    + optionalString cfg.rebuild " && sudo nixos-rebuild switch";
+    ''
+      nix-editor -i -a "$(printf '%s' '{}' | sed 's|^[^/]*/||')" ${escapeShellArg path} ${escapeShellArg attrPath}
+    ''
+    + optionalString cfg.rebuild ''
+      && sudo nixos-rebuild switch
+    ''
+    + ''
+      && printf '%s\n' "Updated ${attrPath} in ${path}"
+    '';
   installActionEntries =
     builtins.concatLists (
       mapAttrsToList
@@ -96,7 +103,7 @@ let
         ;;
     esac
 
-    nix-editor -i --remove-from-array "$package_name" "$config_path" "$config_key"${optionalString cfg.rebuild " && sudo nixos-rebuild switch"}
+    nix-editor -i --remove-from-array "$package_name" "$config_path" "$config_key"${optionalString cfg.rebuild " && sudo nixos-rebuild switch"} && printf '%s\n' "Removed $package_name from $config_key in $config_path"
   '';
   removeInstalledPackageAction = {
     description = "Remove the selected package from its configured Nix destination";
