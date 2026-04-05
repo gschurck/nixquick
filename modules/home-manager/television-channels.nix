@@ -99,9 +99,8 @@ let
         removeSourceMappings);
   removeInstalledPackageCommand = ''
     set -e
-    selection='{}'
-    source_name="$(printf '%s' "$selection" | sed 's|/.*$||')"
-    package_name="$(printf '%s' "$selection" | sed 's|^[^/]*/[[:space:]]*||')"
+    source_name="$(printf '%s' '{}' | sed 's|/.*$||')"
+    package_name="$(printf '%s' '{}' | sed 's|^[^/]*/[[:space:]]*||')"
 
     case "$source_name" in
     ${removeCommandCases}
