@@ -10,6 +10,7 @@ let
     mkOption
     nameValuePair
     optionalAttrs
+    optionals
     optionalString
     replaceStrings
     types;
@@ -43,6 +44,65 @@ let
     );
   installActions = builtins.listToAttrs installActionEntries;
   defaultDestinationPaths = builtins.attrNames cfg.destinations;
+  destinationForAttrPath = attrPath:
+    let
+      matchingPaths =
+        builtins.filter
+          (path: builtins.elem attrPath cfg.destinations.${path})
+          defaultDestinationPaths;
+    in
+    if matchingPaths == [ ] then null else builtins.head matchingPaths;
+  removeSourceMappings =
+    [
+      {
+        source = "system";
+        attrPath = "environment.systemPackages";
+      }
+    ]
+    ++ optionals (cfg.username != null) [
+      {
+        source = "users.${cfg.username}";
+        attrPath = "users.users.${cfg.username}.packages";
+      }
+      {
+        source = "home.${cfg.username}";
+        attrPath = "home-manager.users.${cfg.username}.home.packages";
+      }
+    ];
+  removeCommandCases =
+    builtins.concatStringsSep "\n"
+      (builtins.map
+        (mapping:
+          let
+            destinationPath = destinationForAttrPath mapping.attrPath;
+          in
+          optionalString (destinationPath != null) ''
+            ${escapeShellArg mapping.source})
+              config_path=${escapeShellArg destinationPath}
+              config_key=${escapeShellArg mapping.attrPath}
+              ;;
+          '')
+        removeSourceMappings);
+  removeInstalledPackageCommand = ''
+    selection='{}'
+    source_name="$(printf '%s' "$selection" | sed 's|/.*$||')"
+    package_name="$(printf '%s' "$selection" | sed 's|^[^/]*/[[:space:]]*||')"
+
+    case "$source_name" in
+    ${removeCommandCases}
+      *)
+        echo "No configured destination for source: $source_name" >&2
+        exit 1
+        ;;
+    esac
+
+    nix-editor -i --remove-from-array "$package_name" "$config_path" "$config_key"${optionalString cfg.rebuild " && sudo nixos-rebuild switch"}
+  '';
+  removeInstalledPackageAction = {
+    description = "Remove the selected package from its configured Nix destination";
+    command = removeInstalledPackageCommand;
+    mode = "execute";
+  };
   defaultActionName =
     if defaultDestinationPaths == [ ]
     then null
@@ -149,6 +209,8 @@ in
         ' | sort -u
       '';
       preview.command = "nix-search-tv preview \"$(printf '%s' '{}' | sed 's|^[^/]*/|nixpkgs/|')\"";
+      actions.remove = removeInstalledPackageAction;
+      keybindings.enter = "actions:remove";
     };
   };
 }
