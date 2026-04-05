@@ -33,13 +33,14 @@ let
     else "sudo nixos-rebuild switch";
   mkInstallCommand = path: attrPath:
     ''
+      set -e
       nix-editor -i -a "$(printf '%s' '{}' | sed 's|^[^/]*/||')" ${escapeShellArg path} ${escapeShellArg attrPath}
     ''
     + optionalString cfg.switchAfterAdd ''
-      && ${mkSwitchCommand attrPath}
+      ${mkSwitchCommand attrPath}
     ''
     + ''
-      && printf '%s\n' "Updated ${attrPath} in ${path}"
+      printf '%s\n' "Updated ${attrPath} in ${path}"
     '';
   installActionEntries =
     builtins.concatLists (
@@ -97,6 +98,7 @@ let
           '')
         removeSourceMappings);
   removeInstalledPackageCommand = ''
+    set -e
     selection='{}'
     source_name="$(printf '%s' "$selection" | sed 's|/.*$||')"
     package_name="$(printf '%s' "$selection" | sed 's|^[^/]*/[[:space:]]*||')"
@@ -109,13 +111,15 @@ let
         ;;
     esac
 
-    nix-editor -i --remove-from-array "$package_name" "$config_path" "$config_key"${optionalString cfg.switchAfterRemove ''
-      && if printf '%s' "$config_key" | grep -q '^home-manager\.users\.'; then
+    nix-editor -i --remove-from-array "$package_name" "$config_path" "$config_key"
+    ${optionalString cfg.switchAfterRemove ''
+      if printf '%s' "$config_key" | grep -q '^home-manager\.users\.'; then
         home-manager switch
       else
         sudo nixos-rebuild switch
       fi
-    ''} && printf '%s\n' "Removed $package_name from $config_key in $config_path"
+    ''}
+    printf '%s\n' "Removed $package_name from $config_key in $config_path"
   '';
   removeInstalledPackageAction = {
     description = "Remove the selected package from its configured Nix destination";
