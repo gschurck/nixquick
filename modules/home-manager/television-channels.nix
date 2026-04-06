@@ -3,7 +3,6 @@
 let
   inherit (lib)
     escapeShellArg
-    hasPrefix
     mapAttrsToList
     mkDefault
     mkEnableOption
@@ -17,7 +16,6 @@ let
     types;
 
   cfg = config.nixquick;
-  isHomeManagerAttrPath = attrPath: hasPrefix "home-manager.users." attrPath;
   nixEditorSrc = builtins.fetchTarball {
     url = "https://github.com/gschurck/nix-editor/archive/dec443e058d7368ae18d60bc8c83f0c7a2f6f66e.tar.gz";
   };
@@ -27,10 +25,7 @@ let
   };
   mkInstallActionName = path: attrPath:
     "install to ${attrPath}";
-  mkSwitchCommand = attrPath:
-    if isHomeManagerAttrPath attrPath
-    then "home-manager switch"
-    else "sudo nixos-rebuild switch";
+  mkSwitchCommand = _attrPath: "sudo nixos-rebuild switch";
   mkInstallCommand = path: attrPath:
     ''
       set -e
@@ -112,11 +107,7 @@ let
 
     nix-editor -i --remove-from-array "$package_name" "$config_path" "$config_key"
     ${optionalString cfg.switchAfterRemove ''
-      if printf '%s' "$config_key" | grep -q '^home-manager\.users\.'; then
-        home-manager switch
-      else
-        sudo nixos-rebuild switch
-      fi
+      sudo nixos-rebuild switch
     ''}
     printf '%s\n' "Removed $package_name from $config_key in $config_path"
   '';
@@ -146,7 +137,7 @@ in
       default = false;
       description = ''
         Whether add actions should run a configuration switch after editing the target file.
-        Home Manager destinations run home-manager switch; other destinations run sudo nixos-rebuild switch.
+        Destinations run sudo nixos-rebuild switch after the edit.
       '';
     };
 
@@ -155,7 +146,7 @@ in
       default = false;
       description = ''
         Whether remove actions should run a configuration switch after editing the target file.
-        Home Manager destinations run home-manager switch; other destinations run sudo nixos-rebuild switch.
+        Destinations run sudo nixos-rebuild switch after the edit.
       '';
     };
 
