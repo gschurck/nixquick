@@ -16,16 +16,22 @@ let
     types;
 
   cfg = config.nixquick;
+
+  # Package nix-editor from a pinned upstream revision because it is not available in nixpkgs.
   nixEditorSrc = builtins.fetchTarball {
     url = "https://github.com/gschurck/nix-editor/archive/dec443e058d7368ae18d60bc8c83f0c7a2f6f66e.tar.gz";
   };
+
   nixEditorPkg = import nixEditorSrc {
     inherit pkgs;
     lib = pkgs.lib;
   };
+
   mkInstallActionName = path: attrPath:
     "install to ${attrPath}";
+
   mkSwitchCommand = _attrPath: "sudo nixos-rebuild switch";
+
   mkInstallCommand = path: attrPath:
     ''
       set -e
@@ -37,6 +43,8 @@ let
     + ''
       printf '%s\n' "Installed in ${attrPath} (${path})"
     '';
+
+  # Build one Television action per configured installation destination.
   installActionEntries =
     builtins.concatLists (
       mapAttrsToList
@@ -51,8 +59,10 @@ let
             attrPaths)
         cfg.destinations
     );
+
   installActions = builtins.listToAttrs installActionEntries;
   defaultDestinationPaths = builtins.attrNames cfg.destinations;
+
   destinationForAttrPath = attrPath:
     let
       matchingPaths =
@@ -61,6 +71,8 @@ let
           defaultDestinationPaths;
     in
     if matchingPaths == [ ] then null else builtins.head matchingPaths;
+
+  # Map displayed package sources back to the config locations they came from.
   removeSourceMappings =
     [
       {
@@ -78,6 +90,7 @@ let
         attrPath = "home.packages";
       }
     ];
+
   removeCommandCases =
     builtins.concatStringsSep "\n"
       (builtins.map
@@ -92,6 +105,7 @@ let
               ;;
           '')
         removeSourceMappings);
+
   removeInstalledPackageCommand = ''
     set -e
     source_name="$(printf '%s' '{}' | sed 's|/.*$||')"
@@ -111,22 +125,24 @@ let
     ''}
     printf '%s\n' "Removed $package_name from $config_key in $config_path"
   '';
+
   removeInstalledPackageAction = {
     description = "Remove the selected package from its configured Nix destination";
     command = removeInstalledPackageCommand;
     mode = "execute";
   };
+
   defaultActionName =
-      if defaultDestinationPaths == [ ]
+    if defaultDestinationPaths == [ ]
+    then null
+    else
+      let
+        defaultPath = builtins.head defaultDestinationPaths;
+        defaultAttrPaths = cfg.destinations.${defaultPath};
+      in
+      if defaultAttrPaths == [ ]
       then null
-      else
-        let
-          defaultPath = builtins.head defaultDestinationPaths;
-          defaultAttrPaths = cfg.destinations.${defaultPath};
-        in
-        if defaultAttrPaths == [ ]
-        then null
-        else mkInstallActionName defaultPath (builtins.head defaultAttrPaths);
+      else mkInstallActionName defaultPath (builtins.head defaultAttrPaths);
 in
 {
   options.nixquick = {
@@ -183,6 +199,7 @@ in
     ];
 
     programs.television.enable = mkDefault true;
+
     programs.television.channels.nix-packages = mkDefault ({
       metadata = {
         name = "nix-packages";
@@ -196,6 +213,7 @@ in
       keybindings.enter = "actions:${defaultActionName}";
     });
 
+    # Surface packages coming from system, user, and Home Manager declarations in one channel.
     programs.television.channels.nix-installed-packages = mkDefault {
       metadata = {
         name = "nix-installed-packages";
