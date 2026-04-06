@@ -6,6 +6,11 @@ television TUI.
 
 It supports only NixOS based systems currently, and package configurations without flakes.
 
+It's based on :
+- [television](https://github.com/alexpasmantier/television) for customizable fuzzy search TUI
+- [nix-search-tv](https://github.com/3timeslazy/nix-search-tv) to search the available nixpkgs in the television TUI
+- [nix-editor](https://github.com/snowfallorg/nix-editor) to edit the nix configuration files and add/remove packages
+
 ## Demo
 
 ![nixquick demo](demo.gif)
