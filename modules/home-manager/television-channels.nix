@@ -74,8 +74,8 @@ let
         attrPath = "users.users.${cfg.username}.packages";
       }
       {
-        source = "home.${cfg.username}";
-        attrPath = "home-manager.users.${cfg.username}.home.packages";
+        source = "home";
+        attrPath = "home.packages";
       }
     ];
   removeCommandCases =
@@ -225,7 +225,7 @@ in
                 (nixos.config.users.users.''${user}.packages or []);
 
             hmPkgs =
-              builtins.map (fmt "home.''${user}")
+              builtins.map (fmt "home")
                 (nixos.config.home-manager.users.''${user}.home.packages or []);
           in
             builtins.concatStringsSep "\n" (systemPkgs ++ userPkgs ++ hmPkgs)
