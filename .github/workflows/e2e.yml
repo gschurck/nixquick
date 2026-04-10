@@ -1,0 +1,20 @@
+name: E2E
+
+on:
+  pull_request:
+  push:
+
+jobs:
+  nixos-e2e:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: DeterminateSystems/nix-installer-action@main
+
+      - name: Run switch-disabled test
+        run: nix-build ./tests -A switch-disabled --show-trace
+
+      - name: Run switch-enabled test
+        run: nix-build ./tests -A switch-enabled --show-trace
