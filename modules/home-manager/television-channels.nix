@@ -204,7 +204,10 @@ in
       metadata = {
         name = "nix-packages";
         description = "Search Nix packages and install the selected result";
-        requirements = [ "nix-search-tv" ];
+        requirements = [
+          "nix-search-tv"
+          "nix-editor"
+        ];
       };
       source.command = "nix-search-tv print";
       preview.command = "nix-search-tv preview '{}'";
@@ -218,6 +221,7 @@ in
       metadata = {
         name = "nix-installed-packages";
         description = "List installed Nix packages from system, user, and Home Manager configs";
+        requirements = [ "nix-editor" ];
       };
       source.command = ''
         nix eval --impure --raw --expr '
