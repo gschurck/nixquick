@@ -36,7 +36,7 @@ let
     ''
       set -e
       for selected_item in {}; do
-        nix-editor -i -a "$(printf '%s' "$selected_item" | sed 's|^[^/]*/||')" ${escapeShellArg path} ${escapeShellArg attrPath}
+        nix-editor -i -a "$(printf '%s' "$selected_item" | sed 's|^[^/]*/[[:space:]]*||')" ${escapeShellArg path} ${escapeShellArg attrPath}
       done
     ''
     + optionalString cfg.switchAfterAdd ''
