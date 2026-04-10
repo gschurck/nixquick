@@ -35,7 +35,9 @@ let
   mkInstallCommand = path: attrPath:
     ''
       set -e
-      nix-editor -i -a "$(printf '%s' '{}' | sed 's|^[^/]*/||')" ${escapeShellArg path} ${escapeShellArg attrPath}
+      for selected_item in {}; do
+        nix-editor -i -a "$(printf '%s' "$selected_item" | sed 's|^[^/]*/||')" ${escapeShellArg path} ${escapeShellArg attrPath}
+      done
     ''
     + optionalString cfg.switchAfterAdd ''
       ${mkSwitchCommand attrPath}
@@ -108,22 +110,24 @@ let
 
   removeInstalledPackageCommand = ''
     set -e
-    source_name="$(printf '%s' '{}' | sed 's|/.*$||')"
-    package_name="$(printf '%s' '{}' | sed 's|^[^/]*/[[:space:]]*||')"
+    for selected_item in {}; do
+      source_name="$(printf '%s' "$selected_item" | sed 's|/.*$||')"
+      package_name="$(printf '%s' "$selected_item" | sed 's|^[^/]*/[[:space:]]*||')"
 
-    case "$source_name" in
-    ${removeCommandCases}
-      *)
-        echo "No configured destination for source: $source_name" >&2
-        exit 1
-        ;;
-    esac
+      case "$source_name" in
+      ${removeCommandCases}
+        *)
+          echo "No configured destination for source: $source_name" >&2
+          exit 1
+          ;;
+      esac
 
-    nix-editor -i --remove-from-array "$package_name" "$config_path" "$config_key"
+      nix-editor -i --remove-from-array "$package_name" "$config_path" "$config_key"
+      printf '%s\n' "Removed $package_name from $config_key in $config_path"
+    done
     ${optionalString cfg.switchAfterRemove ''
       sudo nixos-rebuild switch
     ''}
-    printf '%s\n' "Removed $package_name from $config_key in $config_path"
   '';
 
   removeInstalledPackageAction = {
