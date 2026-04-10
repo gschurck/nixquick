@@ -43,11 +43,10 @@ And configure it as you want :
   # ...
   nixquick = {
     enable = true;
+    switchCommand = "sudo nixos-rebuild switch";
     username = "<your_username>";
-    switchAfterAdd = true;
-    switchAfterRemove = false;
     destinations = {
-      "/home/<your_username>/nixos-config/configuration.nix" = [ 
+      "/home/<your_username>/nixos-config/configuration.nix" = [
         "environment.systemPackages"
         "users.users.<your_username>.packages"
       ];
@@ -56,5 +55,26 @@ And configure it as you want :
   };
 }
 ```
+Available options:
+
+- `nixquick.enable`: enable nixquick channels and helpers
+- `nixquick.switchCommand`: optional command run by `... and switch` actions
+- `nixquick.username`: optional username used to inspect user and Home Manager packages
+- `nixquick.destinations`: map of config file paths to package attribute paths that nixquick can edit
 
 Then run `sudo nixos-rebuild switch` to apply the configuration.
+
+## Television actions
+
+The generated Television channels now always expose both action variants:
+
+- `... and switch`: update the Nix file, then run `switchCommand`
+- `... (edit only)`: update the Nix file without rebuilding
+
+The default keybindings are:
+
+- `Enter`: run the `switch` action
+- `Ctrl+E`: run the `edit only` action
+- `Tab`: select multiple packages
+
+This applies to both package installation and package removal.

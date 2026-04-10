@@ -30,7 +30,7 @@ let
   mkInstallActionName = path: attrPath:
     "install to ${attrPath}";
 
-  mkSwitchCommand = _attrPath: "sudo nixos-rebuild switch";
+  mkSwitchCommand = _attrPath: cfg.switchCommand;
 
   mkInstallCommand = path: attrPath:
     ''
@@ -126,7 +126,7 @@ let
       printf '%s\n' "Removed $package_name from $config_key in $config_path"
     done
     ${optionalString cfg.switchAfterRemove ''
-      sudo nixos-rebuild switch
+      ${mkSwitchCommand null}
     ''}
   '';
 
@@ -167,6 +167,14 @@ in
       description = ''
         Whether remove actions should run a configuration switch after editing the target file.
         Destinations run sudo nixos-rebuild switch after the edit.
+      '';
+    };
+
+    switchCommand = mkOption {
+      type = types.str;
+      default = "sudo nixos-rebuild switch";
+      description = ''
+        Command executed when a switch is requested after add or remove actions.
       '';
     };
 
