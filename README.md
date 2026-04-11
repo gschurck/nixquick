@@ -68,8 +68,9 @@ Available options:
 - `nixquick.enable`: enable nixquick channels and helpers
 - `nixquick.switchCommand`: optional command run by `... and switch` actions
 - `nixquick.username`: optional username used to inspect user and Home Manager packages
-- `nixquick.destinations`: map of config file paths to package attribute paths that nixquick can edit
-Then run `sudo nixos-rebuild switch` to apply the configuration.
+- `nixquick.destinations`: map of config file paths to package attribute paths that nixquick can edit. The first destination attribute will be used as default one when pressing `Enter` or `Ctrl+E`.
+
+Then run `sudo nixos-rebuild switch` to apply the configuration. 
 
 ### Flake setup
 
@@ -137,10 +138,10 @@ The generated Television channels now always expose both action variants:
 
 The default keybindings are:
 
-- `Enter`: run the `switch` action
-- `Ctrl+E`: run the `edit only` action
+- `Enter`: run the `switch` action on default first destination attribute
+- `Ctrl+E`: run the `edit only` action on default first destination attribute
 - `Tab`: select multiple packages
-- `F5` from Television to jump to `nix-packages`
-- `F6` from Television to jump to `nix-installed-packages`
+- `F7` from Television to jump to `nix-packages`
+- `F8` from Television to jump to `nix-installed-packages`
 
 This applies to both package installation and package removal.

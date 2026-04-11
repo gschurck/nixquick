@@ -89,13 +89,13 @@ assert_text_contains(
 
 if read_file("/etc/nixquick/nix-packages-enter") != "actions:add to environment.systemPackages and switch":
     raise AssertionError(read_file("/etc/nixquick/nix-packages-enter"))
-if read_file("/etc/nixquick/nix-packages-shortcut") != "f5":
+if read_file("/etc/nixquick/nix-packages-shortcut") != "f7":
     raise AssertionError(read_file("/etc/nixquick/nix-packages-shortcut"))
 if read_file("/etc/nixquick/nix-packages-ctrl-e") != "actions:add to environment.systemPackages (edit only)":
     raise AssertionError(read_file("/etc/nixquick/nix-packages-ctrl-e"))
 if read_file("/etc/nixquick/nix-installed-enter") != "actions:remove and switch":
     raise AssertionError(read_file("/etc/nixquick/nix-installed-enter"))
-if read_file("/etc/nixquick/nix-installed-shortcut") != "f6":
+if read_file("/etc/nixquick/nix-installed-shortcut") != "f8":
     raise AssertionError(read_file("/etc/nixquick/nix-installed-shortcut"))
 if read_file("/etc/nixquick/nix-installed-ctrl-e") != "actions:remove (edit only)":
     raise AssertionError(read_file("/etc/nixquick/nix-installed-ctrl-e"))
