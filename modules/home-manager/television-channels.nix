@@ -27,7 +27,7 @@ let
   };
 
   mkInstallActionName = attrPath: runSwitch:
-    "install to ${attrPath}"
+    "add to ${attrPath}"
     + (if runSwitch then " and switch" else " (edit only)");
 
   mkRemoveActionName = runSwitch:

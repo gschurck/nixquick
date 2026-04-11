@@ -68,13 +68,13 @@ assert_not_contains("/etc/nixos/home.nix", "hello")
 assert_not_contains("/etc/nixos/home.nix", "ripgrep")
 assert_switch_count(0)
 
-if read_file("/etc/nixquick/nix-packages-enter") != "actions:install to environment.systemPackages and switch":
+if read_file("/etc/nixquick/nix-packages-enter") != "actions:add to environment.systemPackages and switch":
     raise AssertionError(read_file("/etc/nixquick/nix-packages-enter"))
-if read_file("/etc/nixquick/nix-packages-ctrl-e") != "actions:install to environment.systemPackages only":
+if read_file("/etc/nixquick/nix-packages-ctrl-e") != "actions:add to environment.systemPackages (edit only)":
     raise AssertionError(read_file("/etc/nixquick/nix-packages-ctrl-e"))
 if read_file("/etc/nixquick/nix-installed-enter") != "actions:remove and switch":
     raise AssertionError(read_file("/etc/nixquick/nix-installed-enter"))
-if read_file("/etc/nixquick/nix-installed-ctrl-e") != "actions:remove only":
+if read_file("/etc/nixquick/nix-installed-ctrl-e") != "actions:remove (edit only)":
     raise AssertionError(read_file("/etc/nixquick/nix-installed-ctrl-e"))
 
 initial_installed = run_installed_source()

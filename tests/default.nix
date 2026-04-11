@@ -144,22 +144,22 @@ let
             };
 
             environment.etc."nixquick/install-system-switch-command".text =
-              config.home-manager.users.alice.programs.television.channels."nix-packages".actions."install to environment.systemPackages and switch".command;
+              config.home-manager.users.alice.programs.television.channels."nix-packages".actions."add to environment.systemPackages and switch".command;
 
             environment.etc."nixquick/install-system-only-command".text =
-              config.home-manager.users.alice.programs.television.channels."nix-packages".actions."install to environment.systemPackages only".command;
+              config.home-manager.users.alice.programs.television.channels."nix-packages".actions."add to environment.systemPackages (edit only)".command;
 
             environment.etc."nixquick/install-home-switch-command".text =
-              config.home-manager.users.alice.programs.television.channels."nix-packages".actions."install to home.packages and switch".command;
+              config.home-manager.users.alice.programs.television.channels."nix-packages".actions."add to home.packages and switch".command;
 
             environment.etc."nixquick/install-home-only-command".text =
-              config.home-manager.users.alice.programs.television.channels."nix-packages".actions."install to home.packages only".command;
+              config.home-manager.users.alice.programs.television.channels."nix-packages".actions."add to home.packages (edit only)".command;
 
             environment.etc."nixquick/remove-switch-command".text =
               config.home-manager.users.alice.programs.television.channels."nix-installed-packages".actions."remove and switch".command;
 
             environment.etc."nixquick/remove-only-command".text =
-              config.home-manager.users.alice.programs.television.channels."nix-installed-packages".actions."remove only".command;
+              config.home-manager.users.alice.programs.television.channels."nix-installed-packages".actions."remove (edit only)".command;
 
             environment.etc."nixquick/installed-source-command".text =
               config.home-manager.users.alice.programs.television.channels."nix-installed-packages".source.command;
