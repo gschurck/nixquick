@@ -15,12 +15,7 @@ let
 
   makeTest = import (nixpkgsSrc + "/nixos/tests/make-test-python.nix");
 
-  mkTest =
-    {
-      name,
-      switchAfterAdd,
-      switchAfterRemove,
-    }:
+  mkTest = { name }:
     makeTest (
       { pkgs, ... }:
       let
@@ -140,7 +135,6 @@ let
               nixquick = {
                 enable = true;
                 username = "alice";
-                inherit switchAfterAdd switchAfterRemove;
                 switchCommand = "echo switch >> /tmp/nixquick-switch.log";
                 destinations = {
                   "/etc/nixos/configuration.nix" = [ "environment.systemPackages" ];
@@ -149,17 +143,38 @@ let
               };
             };
 
-            environment.etc."nixquick/install-system-command".text =
-              config.home-manager.users.alice.programs.television.channels."nix-packages".actions."install to environment.systemPackages".command;
+            environment.etc."nixquick/install-system-switch-command".text =
+              config.home-manager.users.alice.programs.television.channels."nix-packages".actions."install to environment.systemPackages and switch".command;
 
-            environment.etc."nixquick/install-home-command".text =
-              config.home-manager.users.alice.programs.television.channels."nix-packages".actions."install to home.packages".command;
+            environment.etc."nixquick/install-system-only-command".text =
+              config.home-manager.users.alice.programs.television.channels."nix-packages".actions."install to environment.systemPackages only".command;
 
-            environment.etc."nixquick/remove-command".text =
-              config.home-manager.users.alice.programs.television.channels."nix-installed-packages".actions.remove.command;
+            environment.etc."nixquick/install-home-switch-command".text =
+              config.home-manager.users.alice.programs.television.channels."nix-packages".actions."install to home.packages and switch".command;
+
+            environment.etc."nixquick/install-home-only-command".text =
+              config.home-manager.users.alice.programs.television.channels."nix-packages".actions."install to home.packages only".command;
+
+            environment.etc."nixquick/remove-switch-command".text =
+              config.home-manager.users.alice.programs.television.channels."nix-installed-packages".actions."remove and switch".command;
+
+            environment.etc."nixquick/remove-only-command".text =
+              config.home-manager.users.alice.programs.television.channels."nix-installed-packages".actions."remove only".command;
 
             environment.etc."nixquick/installed-source-command".text =
               config.home-manager.users.alice.programs.television.channels."nix-installed-packages".source.command;
+
+            environment.etc."nixquick/nix-packages-enter".text =
+              config.home-manager.users.alice.programs.television.channels."nix-packages".keybindings.enter;
+
+            environment.etc."nixquick/nix-packages-ctrl-e".text =
+              config.home-manager.users.alice.programs.television.channels."nix-packages".keybindings."ctrl-e";
+
+            environment.etc."nixquick/nix-installed-enter".text =
+              config.home-manager.users.alice.programs.television.channels."nix-installed-packages".keybindings.enter;
+
+            environment.etc."nixquick/nix-installed-ctrl-e".text =
+              config.home-manager.users.alice.programs.television.channels."nix-installed-packages".keybindings."ctrl-e";
 
             environment.etc."nixquick/home-profile-path".text =
               toString config.home-manager.users.alice.home.path;
@@ -177,24 +192,12 @@ let
             virtualisation.memorySize = 2048;
           };
 
-        testScript = builtins.readFile (
-          pkgs.replaceVars ./television-e2e.py {
-            expectedSwitches = if switchAfterAdd && switchAfterRemove then "4" else "0";
-          }
-        );
+        testScript = builtins.readFile ./television-e2e.py;
       }
     );
 in
 {
-  "switch-disabled" = mkTest {
-    name = "switch-disabled";
-    switchAfterAdd = false;
-    switchAfterRemove = false;
-  };
-
-  "switch-enabled" = mkTest {
-    name = "switch-enabled";
-    switchAfterAdd = true;
-    switchAfterRemove = true;
+  "television-action-modes" = mkTest {
+    name = "television-action-modes";
   };
 }

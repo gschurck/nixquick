@@ -5,10 +5,11 @@ machine.wait_for_unit("multi-user.target")
 
 profile_bin = machine.succeed("cat /etc/nixquick/home-profile-path").strip() + "/bin"
 test_bin = "/etc/nixquick/test-bin"
+switch_log = "/tmp/nixquick-switch.log"
 
 
 def read_file(path):
-    return machine.succeed(f"cat {shlex.quote(path)}")
+    return machine.succeed(f"cat {shlex.quote(path)}").strip()
 
 
 def assert_contains(path, text):
@@ -17,6 +18,21 @@ def assert_contains(path, text):
 
 def assert_not_contains(path, text):
     machine.fail(f"grep -F {shlex.quote(text)} {shlex.quote(path)}")
+
+
+def reset_switch_log():
+    machine.succeed(f"rm -f {shlex.quote(switch_log)}")
+
+
+def assert_switch_count(expected):
+    if expected == 0:
+        machine.fail(f"test -e {shlex.quote(switch_log)}")
+        return
+
+    machine.succeed(f"test -e {shlex.quote(switch_log)}")
+    switch_count = int(machine.succeed(f"wc -l < {shlex.quote(switch_log)}").strip())
+    if switch_count != expected:
+        raise AssertionError(f"expected {expected} switch runs, got {switch_count}")
 
 
 def run_action(command_path, *selected_items):
@@ -33,90 +49,103 @@ def run_installed_source():
     return machine.succeed(f"bash -lc {shlex.quote(command)}")
 
 
+def assert_installed_output_contains(output, *entries):
+    for entry in entries:
+        if entry not in output:
+            raise AssertionError(output)
+
+
+def assert_installed_output_excludes(output, *entries):
+    for entry in entries:
+        if entry in output:
+            raise AssertionError(output)
+
+
 # Initial state
 assert_not_contains("/etc/nixos/configuration.nix", "hello")
-assert_not_contains("/etc/nixos/home.nix", "jq")
+assert_not_contains("/etc/nixos/configuration.nix", "jq")
+assert_not_contains("/etc/nixos/home.nix", "hello")
 assert_not_contains("/etc/nixos/home.nix", "ripgrep")
-machine.fail("test -e /tmp/nixquick-switch.log")
+assert_switch_count(0)
+
+if read_file("/etc/nixquick/nix-packages-enter") != "actions:install to environment.systemPackages and switch":
+    raise AssertionError(read_file("/etc/nixquick/nix-packages-enter"))
+if read_file("/etc/nixquick/nix-packages-ctrl-e") != "actions:install to environment.systemPackages only":
+    raise AssertionError(read_file("/etc/nixquick/nix-packages-ctrl-e"))
+if read_file("/etc/nixquick/nix-installed-enter") != "actions:remove and switch":
+    raise AssertionError(read_file("/etc/nixquick/nix-installed-enter"))
+if read_file("/etc/nixquick/nix-installed-ctrl-e") != "actions:remove only":
+    raise AssertionError(read_file("/etc/nixquick/nix-installed-ctrl-e"))
 
 initial_installed = run_installed_source()
-if "system/ curl" not in initial_installed:
-    raise AssertionError(initial_installed)
-if "users.alice/ fd" not in initial_installed:
-    raise AssertionError(initial_installed)
-if "home/ tree" not in initial_installed:
-    raise AssertionError(initial_installed)
+assert_installed_output_contains(initial_installed, "system/ curl", "users.alice/ fd", "home/ tree")
 
-# Install one package in Home Manager
-machine.succeed("cp /etc/nixos/configuration.nix /tmp/config-before-home-install")
-run_action("/etc/nixquick/install-home-command", "nixpkgs/hello")
+# Install with switch
+reset_switch_log()
+machine.succeed("cp /etc/nixos/configuration.nix /tmp/config-before-home-switch-install")
+run_action("/etc/nixquick/install-home-switch-command", "nixpkgs/hello")
 assert_contains("/etc/nixos/home.nix", "hello")
-machine.succeed("cmp -s /etc/nixos/configuration.nix /tmp/config-before-home-install")
+machine.succeed("cmp -s /etc/nixos/configuration.nix /tmp/config-before-home-switch-install")
+assert_switch_count(1)
 
-installed_after_home = run_installed_source()
-if "home/ hello" not in installed_after_home:
-    raise AssertionError(installed_after_home)
-if "system/ curl" not in installed_after_home:
-    raise AssertionError(installed_after_home)
-if "users.alice/ fd" not in installed_after_home:
-    raise AssertionError(installed_after_home)
-if "home/ tree" not in installed_after_home:
-    raise AssertionError(installed_after_home)
+installed_after_home_switch = run_installed_source()
+assert_installed_output_contains(
+    installed_after_home_switch,
+    "home/ hello",
+    "system/ curl",
+    "users.alice/ fd",
+    "home/ tree",
+)
 
-# Install multiple system packages
-machine.succeed("cp /etc/nixos/home.nix /tmp/home-before-system-install")
-run_action("/etc/nixquick/install-system-command", "nixpkgs/jq", "nixpkgs/ripgrep")
-machine.succeed("cmp -s /etc/nixos/home.nix /tmp/home-before-system-install")
+# Install without switch
+reset_switch_log()
+machine.succeed("cp /etc/nixos/home.nix /tmp/home-before-system-only-install")
+run_action("/etc/nixquick/install-system-only-command", "nixpkgs/jq", "nixpkgs/ripgrep")
+machine.succeed("cmp -s /etc/nixos/home.nix /tmp/home-before-system-only-install")
 assert_contains("/etc/nixos/configuration.nix", "jq")
 assert_contains("/etc/nixos/configuration.nix", "ripgrep")
+assert_switch_count(0)
 
-installed_after_system = run_installed_source()
-if "system/ jq" not in installed_after_system or "system/ ripgrep" not in installed_after_system:
-    raise AssertionError(installed_after_system)
-if "system/ curl" not in installed_after_system:
-    raise AssertionError(installed_after_system)
-if "users.alice/ fd" not in installed_after_system:
-    raise AssertionError(installed_after_system)
-if "home/ tree" not in installed_after_system:
-    raise AssertionError(installed_after_system)
+installed_after_system_only = run_installed_source()
+assert_installed_output_contains(
+    installed_after_system_only,
+    "system/ jq",
+    "system/ ripgrep",
+    "system/ curl",
+    "users.alice/ fd",
+    "home/ tree",
+    "home/ hello",
+)
 
-# Remove one Home Manager package
-run_action("/etc/nixquick/remove-command", "home/ hello")
+# Remove with switch
+reset_switch_log()
+run_action("/etc/nixquick/remove-switch-command", "home/ hello")
 assert_not_contains("/etc/nixos/home.nix", "hello")
+assert_switch_count(1)
 
 installed_after_home_remove = run_installed_source()
-if "home/ hello" in installed_after_home_remove:
-    raise AssertionError(installed_after_home_remove)
-if "system/ curl" not in installed_after_home_remove:
-    raise AssertionError(installed_after_home_remove)
-if "users.alice/ fd" not in installed_after_home_remove:
-    raise AssertionError(installed_after_home_remove)
-if "home/ tree" not in installed_after_home_remove:
-    raise AssertionError(installed_after_home_remove)
+assert_installed_output_excludes(installed_after_home_remove, "home/ hello")
+assert_installed_output_contains(
+    installed_after_home_remove,
+    "system/ curl",
+    "system/ jq",
+    "system/ ripgrep",
+    "users.alice/ fd",
+    "home/ tree",
+)
 
-# Remove multiple system packages
-run_action("/etc/nixquick/remove-command", "system/ jq", "system/ ripgrep")
+# Remove without switch
+reset_switch_log()
+run_action("/etc/nixquick/remove-only-command", "system/ jq", "system/ ripgrep")
 assert_not_contains("/etc/nixos/configuration.nix", "jq")
 assert_not_contains("/etc/nixos/configuration.nix", "ripgrep")
+assert_switch_count(0)
 
 installed_after_system_remove = run_installed_source()
-if "system/ jq" in installed_after_system_remove or "system/ ripgrep" in installed_after_system_remove:
-    raise AssertionError(installed_after_system_remove)
-if "system/ curl" not in installed_after_system_remove:
-    raise AssertionError(installed_after_system_remove)
-if "users.alice/ fd" not in installed_after_system_remove:
-    raise AssertionError(installed_after_system_remove)
-if "home/ tree" not in installed_after_system_remove:
-    raise AssertionError(installed_after_system_remove)
-
-# Check switch-command behavior
-expected_switches = int("@expectedSwitches@")
-if expected_switches == 0:
-    machine.fail("test -e /tmp/nixquick-switch.log")
-else:
-    machine.succeed("test -e /tmp/nixquick-switch.log")
-    switch_count = int(machine.succeed("wc -l < /tmp/nixquick-switch.log").strip())
-    if switch_count != expected_switches:
-        raise AssertionError(
-            f"expected {expected_switches} switch runs, got {switch_count}"
-        )
+assert_installed_output_excludes(installed_after_system_remove, "system/ jq", "system/ ripgrep")
+assert_installed_output_contains(
+    installed_after_system_remove,
+    "system/ curl",
+    "users.alice/ fd",
+    "home/ tree",
+)

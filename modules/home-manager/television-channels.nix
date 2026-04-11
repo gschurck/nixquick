@@ -12,7 +12,6 @@ let
     optionalAttrs
     optionals
     optionalString
-    replaceStrings
     types;
 
   cfg = config.nixquick;
@@ -27,37 +26,51 @@ let
     lib = pkgs.lib;
   };
 
-  mkInstallActionName = path: attrPath:
-    "install to ${attrPath}";
+  mkInstallActionName = attrPath: runSwitch:
+    "install to ${attrPath}"
+    + (if runSwitch then " and switch" else " (edit only)");
+
+  mkRemoveActionName = runSwitch:
+    if runSwitch then "remove and switch" else "remove (edit only)";
 
   mkSwitchCommand = _attrPath: cfg.switchCommand;
 
-  mkInstallCommand = path: attrPath:
+  mkInstallCommand = path: attrPath: runSwitch:
     ''
       set -e
       for selected_item in {}; do
         nix-editor -i -a "$(printf '%s' "$selected_item" | sed 's|^[^/]*/[[:space:]]*||')" ${escapeShellArg path} ${escapeShellArg attrPath}
       done
     ''
-    + optionalString cfg.switchAfterAdd ''
+    + optionalString runSwitch ''
       ${mkSwitchCommand attrPath}
     ''
     + ''
       printf '%s\n' "Installed in ${attrPath} (${path})"
     '';
 
-  # Build one Television action per configured installation destination.
+  mkInstallActionEntries = path: attrPath:
+    map
+      (runSwitch:
+        nameValuePair (mkInstallActionName attrPath runSwitch) {
+          description =
+            "Install the selected package to ${attrPath}"
+            + optionalString runSwitch " and run the switch command";
+          command = mkInstallCommand path attrPath runSwitch;
+          mode = "execute";
+        })
+      [
+        true
+        false
+      ];
+
+  # Build Television actions for each configured installation destination.
   installActionEntries =
     builtins.concatLists (
       mapAttrsToList
         (path: attrPaths:
-          map
-            (attrPath:
-              nameValuePair (mkInstallActionName path attrPath) {
-                description = "Install the selected package to ${attrPath}";
-                command = mkInstallCommand path attrPath;
-                mode = "execute";
-              })
+          builtins.concatMap
+            (attrPath: mkInstallActionEntries path attrPath)
             attrPaths)
         cfg.destinations
     );
@@ -108,7 +121,7 @@ let
           '')
         removeSourceMappings);
 
-  removeInstalledPackageCommand = ''
+  mkRemoveInstalledPackageCommand = runSwitch: ''
     set -e
     for selected_item in {}; do
       source_name="$(printf '%s' "$selected_item" | sed 's|/.*$||')"
@@ -125,18 +138,28 @@ let
       nix-editor -i --remove-from-array "$package_name" "$config_path" "$config_key"
       printf '%s\n' "Removed $package_name from $config_key in $config_path"
     done
-    ${optionalString cfg.switchAfterRemove ''
+    ${optionalString runSwitch ''
       ${mkSwitchCommand null}
     ''}
   '';
 
-  removeInstalledPackageAction = {
-    description = "Remove the selected package from its configured Nix destination";
-    command = removeInstalledPackageCommand;
-    mode = "execute";
-  };
+  removeInstalledPackageActions = builtins.listToAttrs (
+    map
+      (runSwitch:
+        nameValuePair (mkRemoveActionName runSwitch) {
+          description =
+            "Remove the selected package from its configured Nix destination"
+            + optionalString runSwitch " and run the switch command";
+          command = mkRemoveInstalledPackageCommand runSwitch;
+          mode = "execute";
+        })
+      [
+        true
+        false
+      ]
+  );
 
-  defaultActionName =
+  defaultSwitchActionName =
     if defaultDestinationPaths == [ ]
     then null
     else
@@ -146,29 +169,23 @@ let
       in
       if defaultAttrPaths == [ ]
       then null
-      else mkInstallActionName defaultPath (builtins.head defaultAttrPaths);
+      else mkInstallActionName (builtins.head defaultAttrPaths) true;
+
+  defaultOnlyActionName =
+    if defaultDestinationPaths == [ ]
+    then null
+    else
+      let
+        defaultPath = builtins.head defaultDestinationPaths;
+        defaultAttrPaths = cfg.destinations.${defaultPath};
+      in
+      if defaultAttrPaths == [ ]
+      then null
+      else mkInstallActionName (builtins.head defaultAttrPaths) false;
 in
 {
   options.nixquick = {
     enable = mkEnableOption "the nix-search-tv television channel";
-
-    switchAfterAdd = mkOption {
-      type = types.bool;
-      default = false;
-      description = ''
-        Whether add actions should run a configuration switch after editing the target file.
-        Destinations run sudo nixos-rebuild switch after the edit.
-      '';
-    };
-
-    switchAfterRemove = mkOption {
-      type = types.bool;
-      default = false;
-      description = ''
-        Whether remove actions should run a configuration switch after editing the target file.
-        Destinations run sudo nixos-rebuild switch after the edit.
-      '';
-    };
 
     switchCommand = mkOption {
       type = types.str;
@@ -224,8 +241,11 @@ in
       source.command = "nix-search-tv print";
       preview.command = "nix-search-tv preview '{}'";
       actions = installActions;
-    } // optionalAttrs (defaultActionName != null) {
-      keybindings.enter = "actions:${defaultActionName}";
+    } // optionalAttrs (defaultSwitchActionName != null && defaultOnlyActionName != null) {
+      keybindings = {
+        enter = "actions:${defaultSwitchActionName}";
+        "ctrl-e" = "actions:${defaultOnlyActionName}";
+      };
     });
 
     # Surface packages coming from system, user, and Home Manager declarations in one channel.
@@ -266,8 +286,11 @@ in
         ' | sort -u
       '';
       preview.command = "nix-search-tv preview \"$(printf '%s' '{}' | sed 's|^[^/]*/|nixpkgs/|')\"";
-      actions.remove = removeInstalledPackageAction;
-      keybindings.enter = "actions:remove";
+      actions = removeInstalledPackageActions;
+      keybindings = {
+        enter = "actions:${mkRemoveActionName true}";
+        "ctrl-e" = "actions:${mkRemoveActionName false}";
+      };
     };
   };
 }

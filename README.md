@@ -23,16 +23,17 @@ Include the following in your home-manager nix configuration like `home.nix`:
 
 ```nix
 let
-  nixquick = builtins.fetchTarball "https://github.com/gschurck/nixquick/archive/main.tar.gz";
+  nixquick = builtins.fetchTarball "https://github.com/gschurck/nixquick/archive/refs/tags/v0.1.0.tar.gz";
 in
 {
   # ...
 }
 ```
 
-Use `main` to receive updates automatically, or use latest commit for full reproducibility:
+Use `main` to receive updates automatically, or use a specific commit if you want to pin unreleased changes:
 
 ```nix
+  nixquick = builtins.fetchTarball "https://github.com/gschurck/nixquick/archive/main.tar.gz";
   nixquick = builtins.fetchTarball "https://github.com/gschurck/nixquick/archive/<latest_commit_hash>.tar.gz";
 ```
 
@@ -61,7 +62,6 @@ Available options:
 - `nixquick.switchCommand`: optional command run by `... and switch` actions
 - `nixquick.username`: optional username used to inspect user and Home Manager packages
 - `nixquick.destinations`: map of config file paths to package attribute paths that nixquick can edit
-
 Then run `sudo nixos-rebuild switch` to apply the configuration.
 
 ## Television actions
