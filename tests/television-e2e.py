@@ -35,6 +35,17 @@ def assert_switch_count(expected):
         raise AssertionError(f"expected {expected} switch runs, got {switch_count}")
 
 
+def assert_text_contains(text, expected):
+    if expected not in text:
+        raise AssertionError(text)
+
+
+def assert_switch_log_contains(expected):
+    assert_switch_count(1)
+    switch_output = read_file(switch_log)
+    assert_text_contains(switch_output, expected)
+
+
 def run_action(command_path, *selected_items):
     command = read_file(command_path)
     selected = " ".join(shlex.quote(item) for item in selected_items)
@@ -67,6 +78,14 @@ assert_not_contains("/etc/nixos/configuration.nix", "jq")
 assert_not_contains("/etc/nixos/home.nix", "hello")
 assert_not_contains("/etc/nixos/home.nix", "ripgrep")
 assert_switch_count(0)
+assert_text_contains(
+    read_file("/etc/nixquick/install-system-switch-command"),
+    read_file("/etc/nixquick/expected-switch-command-fragment"),
+)
+assert_text_contains(
+    read_file("/etc/nixquick/installed-source-command"),
+    read_file("/etc/nixquick/expected-installed-source-fragment"),
+)
 
 if read_file("/etc/nixquick/nix-packages-enter") != "actions:add to environment.systemPackages and switch":
     raise AssertionError(read_file("/etc/nixquick/nix-packages-enter"))
@@ -90,7 +109,7 @@ machine.succeed("cp /etc/nixos/configuration.nix /tmp/config-before-home-switch-
 run_action("/etc/nixquick/install-home-switch-command", "nixpkgs/hello")
 assert_contains("/etc/nixos/home.nix", "hello")
 machine.succeed("cmp -s /etc/nixos/configuration.nix /tmp/config-before-home-switch-install")
-assert_switch_count(1)
+assert_switch_log_contains(read_file("/etc/nixquick/expected-switch-log-fragment"))
 
 installed_after_home_switch = run_installed_source()
 assert_installed_output_contains(
@@ -125,7 +144,7 @@ assert_installed_output_contains(
 reset_switch_log()
 run_action("/etc/nixquick/remove-switch-command", "home/ hello")
 assert_not_contains("/etc/nixos/home.nix", "hello")
-assert_switch_count(1)
+assert_switch_log_contains(read_file("/etc/nixquick/expected-switch-log-fragment"))
 
 installed_after_home_remove = run_installed_source()
 assert_installed_output_excludes(installed_after_home_remove, "home/ hello")

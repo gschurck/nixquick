@@ -7,11 +7,16 @@ on:
 jobs:
   nixos-e2e:
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        test-target:
+          - television-action-modes
+          - flake-television-action-modes
 
     steps:
       - uses: actions/checkout@v6
 
       - uses: DeterminateSystems/nix-installer-action@main
 
-      - name: Run television action modes test
-        run: nix-build ./tests -A television-action-modes --show-trace
+      - name: Run ${{ matrix.test-target }} test
+        run: nix-build ./tests -A ${{ matrix.test-target }} --show-trace

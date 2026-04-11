@@ -8,6 +8,7 @@ let
   };
 
   pkgs = import nixpkgsSrc { };
+  repoPath = toString ../.;
   repoSrc = builtins.path {
     path = ../.;
     name = "nixquick-src";
@@ -15,10 +16,12 @@ let
 
   makeTest = import (nixpkgsSrc + "/nixos/tests/make-test-python.nix");
 
-  mkTest = { name }:
+  mkTest = { name, useFlake ? false }:
     makeTest (
       { pkgs, ... }:
       let
+        repoFlake = if useFlake then builtins.getFlake repoPath else null;
+
         testNixEditor = pkgs.writeShellScriptBin "nix-editor" ''
           exec ${pkgs.python3}/bin/python3 - "$@" <<'PY'
           import re
@@ -70,7 +73,15 @@ let
           PY
         '';
 
-        initialConfiguration = pkgs.writeText "nixquick-test-configuration.nix" ''
+        testSudo = pkgs.writeShellScriptBin "sudo" ''
+          exec "$@"
+        '';
+
+        testNixosRebuild = pkgs.writeShellScriptBin "nixos-rebuild" ''
+          printf '%s\n' "$*" >> /tmp/nixquick-switch.log
+        '';
+
+        legacyConfiguration = pkgs.writeText "nixquick-test-configuration.nix" ''
           { pkgs, ... }:
           {
             imports = [ ${homeManagerSrc}/nixos ];
@@ -84,8 +95,35 @@ let
             environment.systemPackages = with pkgs; [ curl ];
 
             home-manager.useGlobalPkgs = true;
+            home-manager.useUserPackages = true;
             home-manager.users.alice = {
               imports = [ /etc/nixos/home.nix ];
+            };
+
+            system.stateVersion = "24.11";
+          }
+        '';
+
+        flakeConfiguration = pkgs.writeText "nixquick-test-flake-configuration.nix" ''
+          { inputs, pkgs, ... }:
+          {
+            imports = [ inputs.home-manager.nixosModules.home-manager ];
+
+            users.users.alice = {
+              isNormalUser = true;
+              home = "/home/alice";
+              packages = with pkgs; [ fd ];
+            };
+
+            environment.systemPackages = with pkgs; [ curl ];
+
+            home-manager.useGlobalPkgs = true;
+            home-manager.useUserPackages = true;
+            home-manager.users.alice = {
+              imports = [ /etc/nixos/home.nix ];
+              home.username = "alice";
+              home.homeDirectory = "/home/alice";
+              home.stateVersion = "24.11";
             };
 
             system.stateVersion = "24.11";
@@ -102,12 +140,47 @@ let
             home.packages = with pkgs; [ tree ];
           }
         '';
+
+        initialFlake = pkgs.writeText "nixquick-test-flake.nix" ''
+          {
+            description = "nixquick flake test";
+
+            inputs = {
+              nixpkgs.url = "path:${nixpkgsSrc}";
+              home-manager.url = "path:${homeManagerSrc}";
+              home-manager.inputs.nixpkgs.follows = "nixpkgs";
+            };
+
+            outputs = inputs@{ nixpkgs, ... }: {
+              nixosConfigurations.machine = nixpkgs.lib.nixosSystem {
+                system = "x86_64-linux";
+                specialArgs = { inherit inputs; };
+                modules = [ ./configuration.nix ];
+              };
+            };
+          }
+        '';
+
+        expectedSwitchCommandFragment =
+          if useFlake
+          then "sudo nixos-rebuild switch --flake '/etc/nixos#machine'"
+          else "sudo nixos-rebuild switch";
+
+        expectedSwitchLogFragment =
+          if useFlake
+          then "switch --flake /etc/nixos#machine"
+          else "switch";
+
+        expectedInstalledSourceFragment =
+          if useFlake
+          then "builtins.getFlake \"/etc/nixos\""
+          else "import <nixpkgs/nixos>";
       in
       {
         name = "nixquick-${name}";
 
         nodes.machine =
-          { config, pkgs, ... }:
+          { config, lib, pkgs, ... }:
           {
             imports = [
               (homeManagerSrc + "/nixos")
@@ -117,7 +190,9 @@ let
               "nixpkgs=${nixpkgsSrc}"
               "nixos-config=/etc/nixos/configuration.nix"
             ];
-            nix.settings.experimental-features = [ "nix-command" ];
+            nix.settings.experimental-features =
+              [ "nix-command" ]
+              ++ lib.optionals useFlake [ "flakes" ];
 
             users.users.alice = {
               isNormalUser = true;
@@ -127,20 +202,33 @@ let
             home-manager.useGlobalPkgs = true;
             home-manager.useUserPackages = true;
             home-manager.users.alice = {
-              imports = [ (import (repoSrc + "/modules/home-manager")).television-channels ];
+              imports = [
+                (
+                  if useFlake
+                  then repoFlake.homeManagerModules.default
+                  else (import (repoSrc + "/modules/home-manager")).television-channels
+                )
+              ];
               home.username = "alice";
               home.homeDirectory = "/home/alice";
               home.stateVersion = "24.11";
 
-              nixquick = {
-                enable = true;
-                username = "alice";
-                switchCommand = "echo switch >> /tmp/nixquick-switch.log";
-                destinations = {
-                  "/etc/nixos/configuration.nix" = [ "environment.systemPackages" ];
-                  "/etc/nixos/home.nix" = [ "home.packages" ];
+              nixquick =
+                {
+                  enable = true;
+                  username = "alice";
+                  destinations = {
+                    "/etc/nixos/configuration.nix" = [ "environment.systemPackages" ];
+                    "/etc/nixos/home.nix" = [ "home.packages" ];
+                  };
+                }
+                // lib.optionalAttrs useFlake {
+                  flake = {
+                    enable = true;
+                    path = "/etc/nixos";
+                    nixosConfiguration = "machine";
+                  };
                 };
-              };
             };
 
             environment.etc."nixquick/install-system-switch-command".text =
@@ -185,12 +273,33 @@ let
             environment.etc."nixquick/home-profile-path".text =
               toString config.home-manager.users.alice.home.path;
 
+            environment.etc."nixquick/test-mode".text =
+              if useFlake then "flake" else "legacy";
+
+            environment.etc."nixquick/expected-switch-command-fragment".text =
+              expectedSwitchCommandFragment;
+
+            environment.etc."nixquick/expected-switch-log-fragment".text =
+              expectedSwitchLogFragment;
+
+            environment.etc."nixquick/expected-installed-source-fragment".text =
+              expectedInstalledSourceFragment;
+
             environment.etc."nixquick/test-bin/nix-editor".source =
               "${testNixEditor}/bin/nix-editor";
 
+            environment.etc."nixquick/test-bin/sudo".source =
+              "${testSudo}/bin/sudo";
+
+            environment.etc."nixquick/test-bin/nixos-rebuild".source =
+              "${testNixosRebuild}/bin/nixos-rebuild";
+
             system.activationScripts.nixquickTestFiles.text = ''
-              install -Dm644 ${initialConfiguration} /etc/nixos/configuration.nix
+              install -Dm644 ${
+                if useFlake then flakeConfiguration else legacyConfiguration
+              } /etc/nixos/configuration.nix
               install -Dm644 ${initialHome} /etc/nixos/home.nix
+              ${lib.optionalString useFlake "install -Dm644 ${initialFlake} /etc/nixos/flake.nix"}
               rm -f /tmp/nixquick-switch.log
             '';
 
@@ -203,7 +312,12 @@ let
     );
 in
 {
-  "television-action-modes" = mkTest {
+  television-action-modes = mkTest {
     name = "television-action-modes";
+  };
+
+  flake-television-action-modes = mkTest {
+    name = "flake-television-action-modes";
+    useFlake = true;
   };
 }

@@ -1,4 +1,4 @@
-{ config, lib, pkgs, ... }:
+{ config, lib, pkgs, osConfig ? null, ... }:
 
 let
   inherit (lib)
@@ -10,8 +10,8 @@ let
     mkOption
     nameValuePair
     optionalAttrs
-    optionals
     optionalString
+    optionals
     types;
 
   cfg = config.nixquick;
@@ -33,7 +33,15 @@ let
   mkRemoveActionName = runSwitch:
     if runSwitch then "remove and switch" else "remove (edit only)";
 
-  mkSwitchCommand = _attrPath: cfg.switchCommand;
+  defaultFlakeRef = "${cfg.flake.path}#${cfg.flake.nixosConfiguration}";
+
+  defaultSwitchCommand =
+    if cfg.flake.enable
+    then "sudo nixos-rebuild switch --flake ${escapeShellArg defaultFlakeRef}"
+    else "sudo nixos-rebuild switch";
+
+  mkSwitchCommand = _attrPath:
+    if cfg.switchCommand != null then cfg.switchCommand else defaultSwitchCommand;
 
   mkInstallCommand = path: attrPath: runSwitch:
     ''
@@ -182,16 +190,84 @@ let
       if defaultAttrPaths == [ ]
       then null
       else mkInstallActionName (builtins.head defaultAttrPaths) false;
+
+  evalUsername = if cfg.username == null then "your-user" else cfg.username;
+
+  installedPackagesConfigExpr =
+    if cfg.flake.enable
+    then ''
+      let
+        flake = builtins.getFlake ${builtins.toJSON cfg.flake.path};
+      in
+        (builtins.getAttr ${builtins.toJSON cfg.flake.nixosConfiguration} flake.nixosConfigurations).config
+    ''
+    else ''
+      (import <nixpkgs/nixos> {}).config
+    '';
+
+  installedPackagesSourceCommand = ''
+    nix eval ${optionalString cfg.flake.enable "--extra-experimental-features 'nix-command flakes' "}--impure --raw --expr '
+        let
+          user = ${builtins.toJSON evalUsername};
+
+          getAttrOr = name: attrs:
+            if builtins.hasAttr name attrs then builtins.getAttr name attrs else null;
+
+          nixosConfig = ${installedPackagesConfigExpr};
+
+          fmt = source: p:
+            let
+              name =
+                if p ? pname then p.pname
+                else if p ? name then p.name
+                else "<unknown>";
+            in
+              source + "/ " + name;
+
+          userConfig =
+            let
+              users = nixosConfig.users.users or {};
+            in
+              getAttrOr user users;
+
+          homeManagerConfig = getAttrOr "home-manager" nixosConfig;
+
+          homeConfig =
+            if homeManagerConfig == null
+            then null
+            else
+              let
+                hmUsers = homeManagerConfig.users or {};
+              in
+                getAttrOr user hmUsers;
+
+          systemPkgs =
+            builtins.map (fmt "system")
+              (nixosConfig.environment.systemPackages or []);
+
+          userPkgs =
+            builtins.map (fmt ${builtins.toJSON "users.${evalUsername}"})
+              (if userConfig == null then [] else userConfig.packages or []);
+
+          hmPkgs =
+            builtins.map (fmt "home")
+              (if homeConfig == null then [] else homeConfig.home.packages or []);
+        in
+          builtins.concatStringsSep "\n" (systemPkgs ++ userPkgs ++ hmPkgs)
+      ' | sort -u
+  '';
 in
 {
   options.nixquick = {
     enable = mkEnableOption "the nix-search-tv television channel";
 
     switchCommand = mkOption {
-      type = types.str;
-      default = "sudo nixos-rebuild switch";
+      type = types.nullOr types.str;
+      default = null;
       description = ''
         Command executed when a switch is requested after add or remove actions.
+        Defaults to `sudo nixos-rebuild switch`, or to `sudo nixos-rebuild switch --flake <path>#<configuration>`
+        when flake support is enabled.
       '';
     };
 
@@ -219,9 +295,48 @@ in
         Destination config paths and the attribute paths where selected packages can be installed.
       '';
     };
+
+    flake = mkOption {
+      type = types.submodule {
+        options = {
+          enable = mkEnableOption "flake-aware evaluation and rebuild commands";
+
+          path = mkOption {
+            type = types.str;
+            default = "/etc/nixos";
+            example = "/home/guillaume/nixos-config";
+            description = ''
+              Local path to the flake containing the NixOS configuration.
+            '';
+          };
+
+          nixosConfiguration = mkOption {
+            type = types.nullOr types.str;
+            default = if osConfig != null then osConfig.networking.hostName else null;
+            example = "laptop";
+            description = ''
+              Name of the target under `nixosConfigurations`.
+            '';
+          };
+        };
+      };
+      default = { };
+      description = ''
+        Flake settings used to build the default switch command and installed-package query.
+      '';
+    };
   };
 
   config = mkIf cfg.enable {
+    assertions = optionals cfg.flake.enable [
+      {
+        assertion = cfg.flake.nixosConfiguration != null;
+        message = ''
+          nixquick.flake.nixosConfiguration must be set when nixquick.flake.enable is true.
+        '';
+      }
+    ];
+
     home.packages = [
       pkgs.nix-search-tv
       nixEditorPkg
@@ -256,36 +371,7 @@ in
         description = "List installed Nix packages from system, user, and Home Manager configs";
         requirements = [ "nix-editor" ];
       };
-      source.command = ''
-        nix eval --impure --raw --expr '
-          let
-            nixos = import <nixpkgs/nixos> {};
-            user = "${if cfg.username == null then "your-user" else cfg.username}";
-
-            fmt = source: p:
-              let
-                name =
-                  if p ? pname then p.pname
-                  else if p ? name then p.name
-                  else "<unknown>";
-              in
-                "''${source}/ ''${name}";
-
-            systemPkgs =
-              builtins.map (fmt "system")
-                nixos.config.environment.systemPackages;
-
-            userPkgs =
-              builtins.map (fmt "users.''${user}")
-                (nixos.config.users.users.''${user}.packages or []);
-
-            hmPkgs =
-              builtins.map (fmt "home")
-                (nixos.config.home-manager.users.''${user}.home.packages or []);
-          in
-            builtins.concatStringsSep "\n" (systemPkgs ++ userPkgs ++ hmPkgs)
-        ' | sort -u
-      '';
+      source.command = installedPackagesSourceCommand;
       preview.command = "nix-search-tv preview \"$(printf '%s' '{}' | sed 's|^[^/]*/|nixpkgs/|')\"";
       actions = removeInstalledPackageActions;
       keybindings = {

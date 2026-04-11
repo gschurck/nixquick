@@ -4,7 +4,7 @@ nixquick is a custom home-manager configuration for [television](https://github.
 to quickly search, install and uninstall nixpkgs across your different nix configuration files out-of-the-box in the 
 television TUI.
 
-It supports only NixOS based systems currently, and package configurations without flakes.
+It supports NixOS based systems, including both classic setups with `systemPackages`, Home Manager setups and flake-based setups as long as your pkgs are configured in arrays in nix config files.
 
 Features :
 - 🔎 Search and install available nix packages
@@ -25,21 +25,22 @@ It's based on :
 
 ## Installation
 
+### Classic setup
+
 Include the following in your home-manager nix configuration like `home.nix`:
 
 ```nix
 let
-  nixquick = builtins.fetchTarball "https://github.com/gschurck/nixquick/archive/refs/tags/v0.1.0.tar.gz";
+  nixquick = builtins.fetchTarball "https://github.com/gschurck/nixquick/archive/main.tar.gz";
 in
 {
   # ...
 }
 ```
 
-Use `main` to receive updates automatically, or use a specific commit if you want to pin unreleased changes:
+Use `main` to receive updates automatically, or use latest commit for full reproducibility:
 
 ```nix
-  nixquick = builtins.fetchTarball "https://github.com/gschurck/nixquick/archive/main.tar.gz";
   nixquick = builtins.fetchTarball "https://github.com/gschurck/nixquick/archive/<latest_commit_hash>.tar.gz";
 ```
 
@@ -69,6 +70,58 @@ Available options:
 - `nixquick.username`: optional username used to inspect user and Home Manager packages
 - `nixquick.destinations`: map of config file paths to package attribute paths that nixquick can edit
 Then run `sudo nixos-rebuild switch` to apply the configuration.
+
+### Flake setup
+
+Add `nixquick` as an input and import the Home Manager module from the flake output:
+
+```nix
+{
+  inputs = {
+    nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
+    home-manager.url = "github:nix-community/home-manager";
+    home-manager.inputs.nixpkgs.follows = "nixpkgs";
+    nixquick.url = "github:gschurck/nixquick";
+  };
+
+  outputs = inputs@{ nixpkgs, home-manager, nixquick, ... }: {
+    nixosConfigurations.my-host = nixpkgs.lib.nixosSystem {
+      system = "x86_64-linux";
+      specialArgs = { inherit inputs; };
+      modules = [
+        home-manager.nixosModules.home-manager
+        ({ ... }: {
+          home-manager.useGlobalPkgs = true;
+          home-manager.users.<your_username> = {
+            imports = [ nixquick.homeManagerModules.default ];
+
+            nixquick = {
+              enable = true;
+              username = "<your_username>";
+              flake = {
+                enable = true;
+                path = "/home/<your_username>/nixos-config";
+                nixosConfiguration = "my-host";
+              };
+              destinations = {
+                "/home/<your_username>/nixos-config/configuration.nix" = [
+                  "environment.systemPackages"
+                  "users.users.<your_username>.packages"
+                ];
+                "/home/<your_username>/nixos-config/home.nix" = [ "home.packages" ];
+              };
+            };
+          };
+        })
+      ];
+    };
+  };
+}
+```
+
+In a flake setup, nixquick still edits ordinary `.nix` module files through `destinations`.
+The flake settings only change how nixquick evaluates the active configuration and which
+default rebuild command it generates.
 
 ## Start nixquick tv channels
 
