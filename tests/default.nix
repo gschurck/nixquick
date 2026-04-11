@@ -167,11 +167,17 @@ let
             environment.etc."nixquick/nix-packages-enter".text =
               config.home-manager.users.alice.programs.television.channels."nix-packages".keybindings.enter;
 
+            environment.etc."nixquick/nix-packages-shortcut".text =
+              config.home-manager.users.alice.programs.television.channels."nix-packages".keybindings.shortcut;
+
             environment.etc."nixquick/nix-packages-ctrl-e".text =
               config.home-manager.users.alice.programs.television.channels."nix-packages".keybindings."ctrl-e";
 
             environment.etc."nixquick/nix-installed-enter".text =
               config.home-manager.users.alice.programs.television.channels."nix-installed-packages".keybindings.enter;
+
+            environment.etc."nixquick/nix-installed-shortcut".text =
+              config.home-manager.users.alice.programs.television.channels."nix-installed-packages".keybindings.shortcut;
 
             environment.etc."nixquick/nix-installed-ctrl-e".text =
               config.home-manager.users.alice.programs.television.channels."nix-installed-packages".keybindings."ctrl-e";

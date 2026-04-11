@@ -243,6 +243,7 @@ in
       actions = installActions;
     } // optionalAttrs (defaultSwitchActionName != null && defaultOnlyActionName != null) {
       keybindings = {
+        shortcut = "f5";
         enter = "actions:${defaultSwitchActionName}";
         "ctrl-e" = "actions:${defaultOnlyActionName}";
       };
@@ -288,6 +289,7 @@ in
       preview.command = "nix-search-tv preview \"$(printf '%s' '{}' | sed 's|^[^/]*/|nixpkgs/|')\"";
       actions = removeInstalledPackageActions;
       keybindings = {
+        shortcut = "f6";
         enter = "actions:${mkRemoveActionName true}";
         "ctrl-e" = "actions:${mkRemoveActionName false}";
       };

@@ -6,6 +6,12 @@ television TUI.
 
 It supports only NixOS based systems currently, and package configurations without flakes.
 
+Features :
+- 🔎 Search and install available nix packages
+- 🗑️ Search and uninstall packages installed on your machine
+- ⚙️ Trigger rebuild switch optionnaly
+- ✅ Support selecting, installing and uninstalling multiple packages simultaneously from different places
+
 It's based on :
 - [television](https://github.com/alexpasmantier/television) for customizable fuzzy search TUI
 - [nix-search-tv](https://github.com/3timeslazy/nix-search-tv) to search the available nixpkgs in the television TUI
@@ -64,6 +70,11 @@ Available options:
 - `nixquick.destinations`: map of config file paths to package attribute paths that nixquick can edit
 Then run `sudo nixos-rebuild switch` to apply the configuration.
 
+## Start nixquick tv channels
+
+- `tv nix-packages` to search and install available nix packages
+- `tv nix-installed-packages` to search and uninstall locally configured packages
+
 ## Television actions
 
 The generated Television channels now always expose both action variants:
@@ -76,5 +87,7 @@ The default keybindings are:
 - `Enter`: run the `switch` action
 - `Ctrl+E`: run the `edit only` action
 - `Tab`: select multiple packages
+- `F5` from Television to jump to `nix-packages`
+- `F6` from Television to jump to `nix-installed-packages`
 
 This applies to both package installation and package removal.
