@@ -6,6 +6,7 @@ machine.wait_for_unit("multi-user.target")
 profile_bin = machine.succeed("cat /etc/nixquick/home-profile-path").strip() + "/bin"
 test_bin = "/etc/nixquick/test-bin"
 switch_log = "/tmp/nixquick-switch.log"
+shell_mode = machine.succeed("cat /etc/nixquick/test-shell-mode").strip()
 
 
 def read_file(path):
@@ -50,14 +51,16 @@ def run_action(command_path, *selected_items):
     command = read_file(command_path)
     selected = " ".join(shlex.quote(item) for item in selected_items)
     rendered = command.replace("{}", selected)
+    shell = "fish" if shell_mode == "fish" else "bash"
     machine.succeed(
-        f"PATH={shlex.quote(test_bin)}:{shlex.quote(profile_bin)}:$PATH bash -lc {shlex.quote(rendered)}"
+        f"PATH={shlex.quote(test_bin)}:{shlex.quote(profile_bin)}:$PATH {shell} -lc {shlex.quote(rendered)}"
     )
 
 
 def run_installed_source():
     command = read_file("/etc/nixquick/installed-source-command")
-    return machine.succeed(f"bash -lc {shlex.quote(command)}")
+    shell = "fish" if shell_mode == "fish" else "bash"
+    return machine.succeed(f"{shell} -lc {shlex.quote(command)}")
 
 
 def assert_installed_output_contains(output, *entries):
@@ -83,8 +86,24 @@ assert_text_contains(
     read_file("/etc/nixquick/expected-switch-command-fragment"),
 )
 assert_text_contains(
+    read_file("/etc/nixquick/install-system-switch-command"),
+    read_file("/etc/nixquick/expected-shell-wrapper-fragment"),
+)
+assert_text_contains(
+    read_file("/etc/nixquick/remove-switch-command"),
+    read_file("/etc/nixquick/expected-shell-wrapper-fragment"),
+)
+assert_text_contains(
     read_file("/etc/nixquick/installed-source-command"),
     read_file("/etc/nixquick/expected-installed-source-fragment"),
+)
+assert_text_contains(
+    read_file("/etc/nixquick/installed-source-command"),
+    read_file("/etc/nixquick/expected-shell-wrapper-fragment"),
+)
+assert_text_contains(
+    read_file("/etc/nixquick/installed-preview-command"),
+    read_file("/etc/nixquick/expected-shell-wrapper-fragment"),
 )
 
 if read_file("/etc/nixquick/nix-packages-enter") != "actions:add to environment.systemPackages and switch":

@@ -16,7 +16,11 @@ let
 
   makeTest = import (nixpkgsSrc + "/nixos/tests/make-test-python.nix");
 
-  mkTest = { name, useFlake ? false }:
+  mkTest = {
+    name,
+    useFlake ? false,
+    useFishShell ? false,
+  }:
     makeTest (
       { pkgs, ... }:
       let
@@ -163,7 +167,7 @@ let
 
         expectedSwitchCommandFragment =
           if useFlake
-          then "sudo nixos-rebuild switch --flake '/etc/nixos#machine'"
+          then "sudo nixos-rebuild switch --flake"
           else "sudo nixos-rebuild switch";
 
         expectedSwitchLogFragment =
@@ -197,6 +201,38 @@ let
             users.users.alice = {
               isNormalUser = true;
               home = "/home/alice";
+            };
+
+            users.users.guillaume = lib.mkIf useFishShell {
+              isNormalUser = true;
+              description = "Guillaume";
+              extraGroups = [
+                "networkmanager"
+                "wheel"
+                "docker"
+                "input"
+                "adbusers"
+              ];
+              shell = pkgs.fish;
+            };
+
+            programs.bash = lib.mkIf useFishShell {
+              interactiveShellInit = ''
+                if [[ $(${pkgs.procps}/bin/ps --no-header --pid=$PPID --format=comm) != "fish" && -z ''${BASH_EXECUTION_STRING} ]]
+                then
+                  shopt -q login_shell && LOGIN_OPTION='--login' || LOGIN_OPTION=""
+                  exec ${pkgs.fish}/bin/fish $LOGIN_OPTION
+                fi
+              '';
+            };
+
+            programs.fish = lib.mkIf useFishShell {
+              enable = true;
+              shellInit = ''
+                function goland
+                  bash -c 'command goland "$@"' -- $argv >/dev/null 2>&1 &
+                end
+              '';
             };
 
             home-manager.useGlobalPkgs = true;
@@ -252,6 +288,9 @@ let
             environment.etc."nixquick/installed-source-command".text =
               config.home-manager.users.alice.programs.television.channels."nix-installed-packages".source.command;
 
+            environment.etc."nixquick/installed-preview-command".text =
+              config.home-manager.users.alice.programs.television.channels."nix-installed-packages".preview.command;
+
             environment.etc."nixquick/nix-packages-enter".text =
               config.home-manager.users.alice.programs.television.channels."nix-packages".keybindings.enter;
 
@@ -276,6 +315,9 @@ let
             environment.etc."nixquick/test-mode".text =
               if useFlake then "flake" else "legacy";
 
+            environment.etc."nixquick/test-shell-mode".text =
+              if useFishShell then "fish" else "bash";
+
             environment.etc."nixquick/expected-switch-command-fragment".text =
               expectedSwitchCommandFragment;
 
@@ -284,6 +326,9 @@ let
 
             environment.etc."nixquick/expected-installed-source-fragment".text =
               expectedInstalledSourceFragment;
+
+            environment.etc."nixquick/expected-shell-wrapper-fragment".text =
+              "bash -lc";
 
             environment.etc."nixquick/test-bin/nix-editor".source =
               "${testNixEditor}/bin/nix-editor";
@@ -319,5 +364,10 @@ in
   flake-television-action-modes = mkTest {
     name = "flake-television-action-modes";
     useFlake = true;
+  };
+
+  fish-television-action-modes = mkTest {
+    name = "fish-television-action-modes";
+    useFishShell = true;
   };
 }

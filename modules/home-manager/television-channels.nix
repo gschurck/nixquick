@@ -43,19 +43,27 @@ let
   mkSwitchCommand = _attrPath:
     if cfg.switchCommand != null then cfg.switchCommand else defaultSwitchCommand;
 
+  mkBashCommand = script:
+    "${pkgs.bash}/bin/bash -lc ${escapeShellArg script}";
+
+  mkBashCommandWithSelection = script:
+    "${pkgs.bash}/bin/bash -lc ${escapeShellArg script} _ {}";
+
   mkInstallCommand = path: attrPath: runSwitch:
-    ''
+    mkBashCommandWithSelection (
+      ''
       set -e
-      for selected_item in {}; do
+      for selected_item in "$@"; do
         nix-editor -i -a "$(printf '%s' "$selected_item" | sed 's|^[^/]*/[[:space:]]*||')" ${escapeShellArg path} ${escapeShellArg attrPath}
       done
     ''
-    + optionalString runSwitch ''
-      ${mkSwitchCommand attrPath}
-    ''
-    + ''
+      + optionalString runSwitch ''
+        ${mkSwitchCommand attrPath}
+      ''
+      + ''
       printf '%s\n' "Installed in ${attrPath} (${path})"
-    '';
+      ''
+    );
 
   mkInstallActionEntries = path: attrPath:
     map
@@ -114,34 +122,44 @@ let
       }
     ];
 
-  removeCommandCases =
-    builtins.concatStringsSep "\n"
-      (builtins.map
-        (mapping:
-          let
-            destinationPath = destinationForAttrPath mapping.attrPath;
-          in
-          optionalString (destinationPath != null) ''
-            ${escapeShellArg mapping.source})
-              config_path=${escapeShellArg destinationPath}
-              config_key=${escapeShellArg mapping.attrPath}
-              ;;
-          '')
-        removeSourceMappings);
+  configuredRemoveSourceMappings =
+    builtins.filter
+      (mapping: destinationForAttrPath mapping.attrPath != null)
+      removeSourceMappings;
 
-  mkRemoveInstalledPackageCommand = runSwitch: ''
+  removeDestinationLookup =
+    builtins.concatStringsSep "\n"
+      (
+        builtins.genList
+          (
+            idx:
+            let
+              mapping = builtins.elemAt configuredRemoveSourceMappings idx;
+              destinationPath = destinationForAttrPath mapping.attrPath;
+              branchKeyword = if idx == 0 then "if" else "elif";
+            in
+            ''
+              ${branchKeyword} [ "$source_name" = ${escapeShellArg mapping.source} ]; then
+                config_path=${escapeShellArg destinationPath}
+                config_key=${escapeShellArg mapping.attrPath}
+            ''
+          )
+          (builtins.length configuredRemoveSourceMappings)
+      )
+    + ''
+      else
+        echo "No configured destination for source: $source_name" >&2
+        exit 1
+      fi
+    '';
+
+  mkRemoveInstalledPackageCommand = runSwitch: mkBashCommandWithSelection ''
     set -e
-    for selected_item in {}; do
+    for selected_item in "$@"; do
       source_name="$(printf '%s' "$selected_item" | sed 's|/.*$||')"
       package_name="$(printf '%s' "$selected_item" | sed 's|^[^/]*/[[:space:]]*||')"
 
-      case "$source_name" in
-      ${removeCommandCases}
-        *)
-          echo "No configured destination for source: $source_name" >&2
-          exit 1
-          ;;
-      esac
+      ${removeDestinationLookup}
 
       nix-editor -i --remove-from-array "$package_name" "$config_path" "$config_key"
       printf '%s\n' "Removed $package_name from $config_key in $config_path"
@@ -371,8 +389,10 @@ in
         description = "List installed Nix packages from system, user, and Home Manager configs";
         requirements = [ "nix-editor" ];
       };
-      source.command = installedPackagesSourceCommand;
-      preview.command = "nix-search-tv preview \"$(printf '%s' '{}' | sed 's|^[^/]*/|nixpkgs/|')\"";
+      source.command = mkBashCommand installedPackagesSourceCommand;
+      preview.command =
+        mkBashCommandWithSelection
+          "nix-search-tv preview \"$(printf '%s' \"$1\" | sed 's|^[^/]*/|nixpkgs/|')\"";
       actions = removeInstalledPackageActions;
       keybindings = {
         shortcut = "f8";
