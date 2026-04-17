@@ -5,13 +5,26 @@ on:
   push:
 
 jobs:
+  discover-tests:
+    runs-on: ubuntu-latest
+    outputs:
+      test-targets: ${{ steps.tests.outputs.test-targets }}
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: DeterminateSystems/nix-installer-action@main
+
+      - id: tests
+        name: Discover test targets
+        run: |
+          echo "test-targets=$(nix eval --impure --json --expr 'builtins.attrNames (import ./tests)')" >> "$GITHUB_OUTPUT"
+
   nixos-e2e:
+    needs: discover-tests
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        test-target:
-          - television-action-modes
-          - flake-television-action-modes
+        test-target: ${{ fromJson(needs.discover-tests.outputs.test-targets) }}
 
     steps:
       - uses: actions/checkout@v6
